@@ -16,10 +16,5 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Install dependencies
-        run: |
-          pip install playwright
-          playwright install chromium
-          
-      - name: Run Scraper for 23f3003974@ds.study.iitm.ac.in
+      - name: 23f3003974@ds.study.iitm.ac.in
         run: python scrape_sum.py
