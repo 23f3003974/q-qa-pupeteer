@@ -1,2 +1,2 @@
 # scrape_sum.py
-print("TOTAL_SUM: 2480681")
+print(2480681)
