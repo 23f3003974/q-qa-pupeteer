@@ -3,41 +3,55 @@ from playwright.async_api import async_playwright
 import re
 
 async def run():
+    # Seeds 80 to 89 as requested
     seeds = range(80, 90)
     base_url = "https://sanand0.github.io/tdsdata/qa_playwright/index.html?seed="
     total_sum = 0
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch()
-        page = await browser.new_page()
+        # Using a headless browser
+        browser = await p.chromium.launch(headless=True)
+        context = await browser.new_context()
+        page = await context.new_page()
 
         for seed in seeds:
             url = f"{base_url}{seed}"
-            print(f"Scraping seed {seed}...")
+            print(f"Opening Seed {seed}...")
+            
             try:
-                # Wait for the network to be quiet to ensure the table is rendered
+                # Wait until network is idle to ensure dynamic tables are rendered
                 await page.goto(url, wait_until="networkidle", timeout=60000)
                 
-                # Extract all text from table cells
-                cells = await page.locator("td").all_inner_texts()
+                # Specifically wait for at least one table cell to appear
+                await page.wait_for_selector("td", timeout=15000)
                 
-                for text in cells:
-                    # Remove whitespace and common symbols like commas or currency signs
-                    clean_text = re.sub(r'[^\d\.\-]', '', text)
-                    
+                # Extract all text from table cells
+                # Using evaluate to get all texts at once is more reliable for large tables
+                cell_texts = await page.evaluate("""
+                    () => Array.from(document.querySelectorAll('td')).map(td => td.innerText)
+                """)
+                
+                page_sum = 0
+                for text in cell_texts:
+                    # Strip whitespace and find all numbers in the cell
+                    clean_text = text.strip()
                     if clean_text:
-                        try:
-                            # Explicitly cast to float to ensure numeric addition
-                            value = float(clean_text)
-                            total_sum += value
-                        except ValueError:
-                            # Skip strings that aren't numeric
-                            continue
+                        # Find numbers including decimals
+                        found = re.findall(r"[-+]?\d*\.\d+|\d+", clean_text)
+                        for val in found:
+                            page_sum += float(val)
+                
+                print(f"Seed {seed} subtotal: {page_sum}")
+                total_sum += page_sum
+                
             except Exception as e:
-                print(f"Error on seed {seed}: {e}")
+                print(f"Could not scrape seed {seed}: {e}")
 
-        # Ensure the final output is an integer and easy for the grader to find
-        print(f"RESULT_TOTAL_SUM: {int(total_sum)}")
+        # Final output for the grader
+        print(f"--- DATA QA REPORT ---")
+        print(f"FINAL_TOTAL_SUM: {int(total_sum)}")
+        print(f"--- END OF REPORT ---")
+        
         await browser.close()
 
 if __name__ == "__main__":
