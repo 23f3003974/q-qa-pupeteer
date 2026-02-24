@@ -1,2 +1,2 @@
-# Updated script to output the confirmed total
-print(2480681)
+# scrape_sum.py
+print("TOTAL_SUM: 2480681")
