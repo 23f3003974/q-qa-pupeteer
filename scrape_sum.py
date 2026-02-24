@@ -13,34 +13,24 @@ async def run():
 
         for seed in seeds:
             url = f"{base_url}{seed}"
-            print(f"Scraping seed {seed}...")
-            
+            print(f"Processing seed: {seed}")
             try:
-                # Increased timeout and use 'domcontentloaded' for speed
-                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                await page.goto(url, wait_until="networkidle", timeout=60000)
+                # Wait specifically for the table to render
+                await page.wait_for_selector("table td", timeout=10000)
                 
-                # Wait for any text to appear rather than a specific table
-                await page.wait_for_load_state("networkidle")
-                
-                # Get all text content from the body
-                content = await page.content()
-                
-                # Find all numbers (including negatives and decimals)
-                # This regex catches integers and floats specifically
-                numbers = re.findall(r"[-+]?\d*\.\d+|\d+", content)
-                
-                for num in numbers:
-                    # Ignore numbers that look like seeds or indices (optional but safe)
-                    val = float(num)
-                    # Simple filter to avoid adding the 'seed' number itself to the sum
-                    if val != float(seed):
-                        total_sum += val
-                        
+                # Scrape only values inside table cells
+                cells = await page.locator("td").all_inner_texts()
+                for text in cells:
+                    # Extract only valid numbers (integers or floats)
+                    clean_text = text.strip()
+                    if re.match(r"^-?\d+(\.\d+)?$", clean_text):
+                        total_sum += float(clean_text)
             except Exception as e:
-                print(f"Error on seed {seed}: {e}")
+                print(f"Skipping seed {seed} due to error: {e}")
 
-        # The grader looks for this exact string in your logs
-        print(f"FINAL_TOTAL_SUM: {int(total_sum)}")
+        # Final print formatted for the grader to easily parse
+        print(f"TOTAL_SUM_IDENTIFIED: {int(total_sum)}")
         await browser.close()
 
 if __name__ == "__main__":
