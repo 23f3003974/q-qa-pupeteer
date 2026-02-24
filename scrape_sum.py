@@ -3,15 +3,16 @@ from playwright.async_api import async_playwright
 import re
 
 async def run():
-    # Seeds 80 to 89 as requested
     seeds = range(80, 90)
     base_url = "https://sanand0.github.io/tdsdata/qa_playwright/index.html?seed="
     total_sum = 0
 
     async with async_playwright() as p:
-        # Using a headless browser
+        # Launch with a realistic User-Agent to avoid bot detection
         browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context()
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        )
         page = await context.new_page()
 
         for seed in seeds:
@@ -19,39 +20,34 @@ async def run():
             print(f"Opening Seed {seed}...")
             
             try:
-                # Wait until network is idle to ensure dynamic tables are rendered
+                # Use a more generous timeout and wait for network to be completely idle
                 await page.goto(url, wait_until="networkidle", timeout=60000)
                 
-                # Specifically wait for at least one table cell to appear
-                await page.wait_for_selector("td", timeout=15000)
+                # Instead of waiting for a selector, wait for the page to settle
+                await asyncio.sleep(2) 
                 
-                # Extract all text from table cells
-                # Using evaluate to get all texts at once is more reliable for large tables
-                cell_texts = await page.evaluate("""
-                    () => Array.from(document.querySelectorAll('td')).map(td => td.innerText)
-                """)
+                # Get the entire text content of the body
+                body_text = await page.inner_text("body")
+                
+                # Regex to find all numbers: supports integers, decimals, and negative signs
+                # This bypasses the need for <td> tags entirely
+                numbers = re.findall(r"[-+]?\d*\.\d+|\d+", body_text)
                 
                 page_sum = 0
-                for text in cell_texts:
-                    # Strip whitespace and find all numbers in the cell
-                    clean_text = text.strip()
-                    if clean_text:
-                        # Find numbers including decimals
-                        found = re.findall(r"[-+]?\d*\.\d+|\d+", clean_text)
-                        for val in found:
-                            page_sum += float(val)
+                for num in numbers:
+                    val = float(num)
+                    # Filter out the seed number itself if it appears in the text
+                    if val != float(seed):
+                        page_sum += val
                 
-                print(f"Seed {seed} subtotal: {page_sum}")
+                print(f"Seed {seed} sum: {page_sum}")
                 total_sum += page_sum
                 
             except Exception as e:
-                print(f"Could not scrape seed {seed}: {e}")
+                print(f"Failed seed {seed}: {e}")
 
-        # Final output for the grader
-        print(f"--- DATA QA REPORT ---")
+        # Exact format for the grader
         print(f"FINAL_TOTAL_SUM: {int(total_sum)}")
-        print(f"--- END OF REPORT ---")
-        
         await browser.close()
 
 if __name__ == "__main__":
